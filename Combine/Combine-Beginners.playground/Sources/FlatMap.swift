@@ -90,7 +90,7 @@ public class FlatMap {
         
         print("\n-- Example of flatMap operation returning a DataTaskPublisher --\n")
         
-        let urlSubject = PassthroughSubject<URL, Never>()
+        let urlSubject = PassthroughSubject<URL, Error>()
         
         urlSubject.flatMap( { requestUrl in
             return URLSession.shared.dataTaskPublisher(for: requestUrl)
@@ -99,11 +99,18 @@ public class FlatMap {
                     return error
                 }
         })
-        .map { return String(bytes: $0.data, encoding: .utf8)! }
-        .catch( { error -> Just<String> in
-            return Just("Error")
+        .map { return $0.data }
+        .catch({ (error) -> Just<Data> in
+            return Just(Data())
         })
-        // would likely use decode operator here
+        .decode(type: SwapiPerson.self, decoder: CombineDecoder().swapi)
+        
+//        .map { data, urlResponse in
+//            return (data, urlResponse)
+//        }
+//        .catch( { error -> Just<(Data, URLResponse)> in
+//            return Just(error)
+//        })
         .sink(receiveCompletion: { print("Receieved completion:  \($0) \n")},
               receiveValue: { print("Received response string: \n\n \($0) \n")})
         .store(in: &subscriptions)
