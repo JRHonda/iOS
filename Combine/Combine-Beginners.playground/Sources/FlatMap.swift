@@ -5,10 +5,15 @@ public class FlatMap {
     
     var subscriptions = Set<AnyCancellable>()
     
-    public init() { }
+    public var semaphore: DispatchSemaphore
+    
+    public init(semaphore: DispatchSemaphore) {
+        self.semaphore = semaphore
+    }
     
     // MARK: - Basic flatMap operations to show how flatMap "flattens"
     
+    ///
     public func singleFlatMapOperation() {
         
         print("\n-- Example of a single flatMap operation --\n")
@@ -23,6 +28,7 @@ public class FlatMap {
             .store(in: &subscriptions)
     }
     
+    ///
     public func singleFlatMapOperationOn3rdDegreeArray() {
         
         print("\n-- Example of single flatMap operation on 3rd degree array [[[Int]]] --\n")
@@ -48,6 +54,7 @@ public class FlatMap {
         
     }
     
+    ///
     public func multipleFlatMapOperations() {
         
         print("\n-- Example of multiple flatMap operations --\n")
@@ -86,34 +93,32 @@ public class FlatMap {
     
     // MARK: - Slightly more advanced flatMap scenarios
     
+    /// There is a verbose version of this implementation using the "map()" operator instead. See Map.swift
     public func flatMapUrlToReturnADataTaskPublisher() {
         
         print("\n-- Example of flatMap operation returning a DataTaskPublisher --\n")
         
         let urlSubject = PassthroughSubject<URL, Error>()
         
-        urlSubject.flatMap( { requestUrl in
-            return URLSession.shared.dataTaskPublisher(for: requestUrl)
-                .retry(3)
-                .mapError { (error) -> Error in
-                    return error
-                }
-        })
-        .map { return $0.data }
-        .catch({ (error) -> Just<Data> in
-            return Just(Data())
-        })
-        .decode(type: SwapiPerson.self, decoder: CombineDecoder().swapi)
-        
-//        .map { data, urlResponse in
-//            return (data, urlResponse)
-//        }
-//        .catch( { error -> Just<(Data, URLResponse)> in
-//            return Just(error)
-//        })
-        .sink(receiveCompletion: { print("Receieved completion:  \($0) \n")},
-              receiveValue: { print("Received response string: \n\n \($0) \n")})
-        .store(in: &subscriptions)
+        urlSubject
+            .flatMap( { requestUrl in
+                return URLSession.shared.dataTaskPublisher(for: requestUrl)
+                    .retry(3)
+                    .mapError { (error) -> Error in
+                        return error
+                    }
+            })
+            .map { return $0.data }
+            .catch({ (error) -> Just<Data> in
+                return Just(Data())
+            })
+            .decode(type: SwapiPerson.self, decoder: CombineDecoder().swapi)
+            .sink(receiveCompletion: { print("Completion: \($0) \n")},
+                  receiveValue: {
+                    print("Received:\n\n\($0)\n")
+                    self.semaphore.signal()
+                  })
+            .store(in: &subscriptions)
         
         urlSubject.send(URL(string: "https://swapi.dev/api/people/1")!) // Luke Skywalker
         urlSubject.send(completion: .finished)

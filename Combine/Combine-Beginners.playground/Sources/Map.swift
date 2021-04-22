@@ -5,7 +5,11 @@ public class Map {
     
     private var subscriptions = Set<AnyCancellable>()
     
-    public init() {}
+    public var semaphore: DispatchSemaphore
+    
+    public init(semaphore: DispatchSemaphore) {
+        self.semaphore = semaphore
+    }
     
     ///
     public func mapArrayOfIntegerStringsToIntegers() {
@@ -44,6 +48,7 @@ public class Map {
             .store(in: &subscriptions)
     }
     
+    ///
     public func mapUsingMultipleKeyPaths() {
         
         print("\n-- Example of map(_ keyPath1, _ keyPath2, _ kayPath3) --\n")
@@ -79,4 +84,65 @@ public class Map {
             .store(in: &subscriptions)
     }
     
+    /// See FlatMap version of this identical API call
+    public func exampleImplementationOfVerbosityUsingMapInsteadOfFlatMap() {
+        
+        print("\n-- Example of API call using map --\n")
+        
+        let urlSubject = PassthroughSubject<URL, Never>()
+        
+        urlSubject
+            .map { requestUrl in
+                
+                return URLSession.shared.dataTaskPublisher(for: requestUrl)
+                    .retry(3)
+                    .mapError { error in
+                        return error
+                    }
+                    .map { return $0.data }
+                    .catch({ error in
+                        return Just(Data())
+                    })
+                
+            }
+            .map { dataPublisher in
+                return Just(dataPublisher
+                                .map { value in
+                                    return value
+                                })
+                    .output
+            }
+            .sink { output in
+                
+                output
+                    .map({ return $0})
+                    .decode(type: SwapiPerson.self, decoder: CombineDecoder().swapi)
+                    .sink(receiveCompletion: { print("Completion: \($0)") },
+                          receiveValue:  { person in
+                            print(person)
+                            
+                        
+                            self.semaphore.signal()
+                           
+                            
+                          })
+                    .store(in: &self.subscriptions)
+            }
+            .store(in: &subscriptions)
+        
+        
+        urlSubject.send(URL(string: "https://swapi.dev/api/people/1")!) // Luke Skywalker
+        urlSubject.send(completion: .finished)
+        
+        
+    }
+    
 }
+
+//public struct SwapiPerson:Decodable {
+//    
+//}
+//
+//public class CombineDecoder {
+//    public var swapi: JSONDecoder!
+//}
